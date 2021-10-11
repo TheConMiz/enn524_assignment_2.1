@@ -3,6 +3,8 @@ import time
 
 # TODO - client both publishes and subscribes
 
+messageCount = 0
+
 def on_connect(client, userdata, flags, rc):
     print("Connected to MQTT Server at IP 192.168.0.221")
     print("Connection returned result: " + str(rc))
@@ -12,9 +14,6 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     # Count 10/100kb messages received. TODO: MOVE VARAIBLES ELSEWHERE. THEY KEEP GETTING RESET. 
-    smallMessageCount = 0
-    largeMessageCount = 0
-    expectedMessageCount = 600
 
     if msg.topic == "message/rtd":
         # Get the current timestamp
@@ -29,23 +28,21 @@ def on_message(client, userdata, msg):
         print("Received Timestamp: " + str(currentTime) + " seconds. \n")
         print("Round Trip Time: " + str(roundTripTime) + " seconds. \n")
 
-    elif msg.topic == "message/10kb":
+    elif msg.topic == "message/10kb" or msg.topic == "message/100kb":
+        global messageCount
+        messageCount += 1
+
         print("Topic: " + msg.topic)
         
-        if msg.payload.decode("utf-8") == "done":
-            packetLossRate = (expectedMessageCount - smallMessageCount) / expectedMessageCount * 100
+        # if msg.payload.decode("utf-8") == "done":
+        #     packetLossRate = (expectedMessageCount - messageCount) / expectedMessageCount * 100
 
-            print(str(smallMessageCount) + " messages received with packet loss of " + str(packetLossRate) + " percent. \n")
+        #     print(str(messageCount) + " messages received with packet loss of " + str(packetLossRate) + " percent. \n")
         
-        else:
-            smallMessageCount += 1
-            smallMessageSize = len(msg.payload)
-            print("Message received. Size: " + str(smallMessageSize) + "B")
-
-    # TODO: Finish 10kb, and copy paste. 
-    # elif msg.topic == "message/100kb":
-    #     print("Topic: " + msg.topic)
-
+        # else:
+        # messageCount += 1
+        messageSize = len(msg.payload)
+        print("Message received. Size: " + str(messageSize) + "B")
 
 
 def on_subscribe(client, userdata, mid, granted_qos):
@@ -54,11 +51,13 @@ def on_subscribe(client, userdata, mid, granted_qos):
 
 def on_publish(client,userdata,result):             
     #create function for callback
-    print("Data published \n")
+    print("Data published. \n")
     pass
 
 
 def publish(client, topic1, topic2, topic3):
+
+    expectedMessageCount = 1200
     
     # Prepare large messages.
     smallFile = open("./10kb.txt", "r")
@@ -67,7 +66,7 @@ def publish(client, topic1, topic2, topic3):
     largeMessage = largeFile.readlines()
 
     # TODO: Define a timer of 600 seconds. 
-    timeCount = 5
+    timeCount = expectedMessageCount / 2
 
     while timeCount >= 0:
         time.sleep(1)
@@ -77,17 +76,22 @@ def publish(client, topic1, topic2, topic3):
         # client.publish(topic1, str(time.time()), qos=1)
         # Each of these messages must be sent at least once for the packet loss calculations, so QoS = 1
         client.publish(topic2, str(smallMessage), qos=1)
+        client.publish(topic3, str(largeMessage), qos=1)
 
         if timeCount == 0:
             client.publish(topic2, "done", qos=1)
-
-        client.publish(topic3, str(largeMessage), qos=1)
-        
-        if timeCount == 0:
             client.publish(topic3, "done", qos=1)
 
         # Reduce counter every second. 
         timeCount -= 1
+
+    print("Count: " + str(messageCount))
+
+    packetLossRate = (expectedMessageCount - messageCount) / expectedMessageCount * 100
+
+    print(str(messageCount) + " messages received with packet loss of " + str(packetLossRate) + " percent. \n")
+
+
 
 
 def subscribe(client, topic1, topic2, topic3):
